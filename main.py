@@ -1,34 +1,43 @@
+from flask import Flask, request, jsonify
 import torch
+from titanic_nn import TitanicNN  # Assuming your model class is defined in model_file.py
 
-# Check if CUDA (GPU support) is available
-if torch.cuda.is_available():
-    print("CUDA is available. GPU is ready for use.")
-    print(f"GPU: {torch.cuda.get_device_name(0)}")
-else:
-    print("CUDA is not available. Using CPU instead.")
+app = Flask(__name__)
 
+# Hyperparameters
+input_size = 9  # Assuming you have 9 features in your dataset
+hidden_size = 64
+output_size = 1  # Assuming you're predicting survival (binary classification)
 
-import json
+# Load the saved model
+model = TitanicNN(input_size, hidden_size, output_size)  # Initialize the model
+model.load_state_dict(torch.load('model.pth'))  # Load the model weights
 
-from kafka import KafkaProducer
+# Define endpoint for model inference
+@app.route('/predict', methods=['POST'])
+def predict():
+    # Get input data from the request
+    data = request.json  # Assuming input data is sent as JSON
 
-# Create a Kafka producer instance
-# 'bootstrap_servers' should point to the Kafka broker(s)
-producer = KafkaProducer(bootstrap_servers='172.19.0.4:9092',
-                         value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+    # Convert the input data to a PyTorch tensor
+    input_data = torch.tensor([list(data.values())], dtype=torch.float32)
 
-# Define the topic name
-topic_name = 'my_topic'
+    # Set the model to evaluation mode
+    model.eval()
 
-# Create a JSON message
-message = {
-    'greeting': 'Hello',
-    'target': 'mina'
-}
+    # Pass input data through the model to get predictions
+    with torch.no_grad():
+        predictions = model(input_data)
 
+    # Convert predictions to probabilities (if needed)
+    probabilities = torch.sigmoid(predictions)  # Assuming the model output is logits for binary classification
 
-producer.send(topic_name, message)
+    # Prepare the response
+    response = {
+        'prediction': probabilities.item()  # Convert tensor to Python float
+    }
 
-# Ensure all messages are sent and then close the producer
-producer.flush()
-producer.close()
+    return jsonify(response)
+
+if __name__ == '__main__':
+    app.run(debug=True)
