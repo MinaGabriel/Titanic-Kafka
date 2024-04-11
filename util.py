@@ -15,7 +15,7 @@ class CustomKafkaDataset(Dataset):
     def __getitem__(self, idx):
         # Extract the data point at the given index
         sample = self.data[idx]
-
+        print(sample)
         # Convert the data point to tensors
         # TODO: Check other datatypes
         features = torch.tensor([value for key, value in sample.items() if key != self.label], dtype=torch.float32)

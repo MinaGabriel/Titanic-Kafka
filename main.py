@@ -1,43 +1,48 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, render_template, jsonify
+from titanic_nn import TitanicNN
 import torch
-from titanic_nn import TitanicNN  # Assuming your model class is defined in model_file.py
 
 app = Flask(__name__)
 
-# Hyperparameters
-input_size = 9  # Assuming you have 9 features in your dataset
-hidden_size = 64
-output_size = 1  # Assuming you're predicting survival (binary classification)
+# Load the model
+model = TitanicNN()
+model.load_state_dict(torch.load('model.pth'))
+model.eval()  # Set the model to evaluation mode
 
-# Load the saved model
-model = TitanicNN(input_size, hidden_size, output_size)  # Initialize the model
-model.load_state_dict(torch.load('model.pth'))  # Load the model weights
 
-# Define endpoint for model inference
-@app.route('/predict', methods=['POST'])
-def predict():
-    # Get input data from the request
-    data = request.json  # Assuming input data is sent as JSON
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-    # Convert the input data to a PyTorch tensor
-    input_data = torch.tensor([list(data.values())], dtype=torch.float32)
 
-    # Set the model to evaluation mode
-    model.eval()
+@app.route('/infer', methods=['GET', 'POST'])
+def infer():
+    if request.method == 'POST':
+        data = request.get_json()
 
-    # Pass input data through the model to get predictions
-    with torch.no_grad():
-        predictions = model(input_data)
+        values = [
+            data.get('Embarked', 0.0),
+            data.get('Fare', 0.0) / 512,
+            data.get('Parch', 0.0),
+            data.get('Pclass', 0.0),
+            data.get('Sex', 0.0),
+            data.get('SibSp', 0.0),
+            data.get('Relative', 0.0),
+            data.get('AgeGroup', 0.0),
+            data.get('Title', 0.0)
+        ]
 
-    # Convert predictions to probabilities (if needed)
-    probabilities = torch.sigmoid(predictions)  # Assuming the model output is logits for binary classification
+        tensor = torch.tensor([values], dtype=torch.float32)
+        
+        print(tensor)
+        
+        # Perform inference
+        with torch.no_grad():  # We do not need to track gradients for inference
+            predictions = model(tensor)
+            print(predictions)
 
-    # Prepare the response
-    response = {
-        'prediction': probabilities.item()  # Convert tensor to Python float
-    }
+        return jsonify({'predictions': round(predictions.item(),2)})
 
-    return jsonify(response)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=True)

@@ -36,3 +36,4 @@ services:
             count: all
             capabilities: [gpu]
     ipc: host
+
